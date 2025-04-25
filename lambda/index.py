@@ -22,19 +22,10 @@ bedrock_client = None
 MODEL_ID = "google/gemma-2-2b-jpn-it"
 
 # APIエンドポイント
-ENDPOINT = "https://c876-34-16-172-104.ngrok-free.app/"
+ENDPOINT = "https://cbd6-34-16-172-104.ngrok-free.app/"
 
 def lambda_handler(event, context):
     try:
-        # コンテキストから実行リージョンを取得し、クライアントを初期化
-        # global bedrock_client
-        # if bedrock_client is None:
-        #     region = extract_region_from_arn(context.invoked_function_arn)
-        #     bedrock_client = boto3.client('bedrock-runtime', region_name=region)
-        #     print(f"Initialized Bedrock client in region: {region}")
-        
-        # print("Received event:", json.dumps(event))
-        
         # Cognitoで認証されたユーザー情報を取得
         user_info = None
         if 'requestContext' in event and 'authorizer' in event['requestContext']:
@@ -44,38 +35,23 @@ def lambda_handler(event, context):
         # リクエストボディの解析
         body = json.loads(event['body'])
         message = body['message']
-        # conversation_history = body.get('conversationHistory', [])
-        
+        conversation_history = body.get('conversationHistory', [])
+        print("The request body: ", body)
         print("Processing message:", message)
         print("Using model:", MODEL_ID)
         
         # 会話履歴を使用
-        # messages = conversation_history.copy()
+        messages = conversation_history.copy()
         
         # ユーザーメッセージを追加
-        # messages.append({
-        #     "role": "user",
-        #     "content": message
-        # })
-        
-        # Nova Liteモデル用のリクエストペイロードを構築
-        # 会話履歴を含める
-        # bedrock_messages = []
-        # for msg in messages:
-        #     if msg["role"] == "user":
-        #         bedrock_messages.append({
-        #             "role": "user",
-        #             "content": [{"text": msg["content"]}]
-        #         })
-        #     elif msg["role"] == "assistant":
-        #         bedrock_messages.append({
-        #             "role": "assistant", 
-        #             "content": [{"text": msg["content"]}]
-        #         })
+        messages.append({
+            "role": "user",
+            "content": message
+        })
         
         # invoke_model用のリクエストペイロード
         request_payload = {
-            "prompt": message,
+            "messages": messages,
             "max_new_tokens": 512,
             "do_sample": True,
             "temperature": 0.7,
@@ -85,13 +61,8 @@ def lambda_handler(event, context):
         
         print("Calling FastAPI generate with payload:", request_payload)
         
-        # invoke_model APIを呼び出し
-        # response = bedrock_client.invoke_model(
-        #     modelId=MODEL_ID,
-        #     body=json.dumps(request_payload),
-        #     contentType="application/json"
-        # )
-        generate_request = request.Request(ENDPOINT + "generate", data=request_payload, method="POST")
+        # APIを呼び出し
+        generate_request = request.Request(ENDPOINT + "generate_with_history", data=request_payload, method="POST")
         generate_request.add_header("Content-Type", "application/json")
         with request.urlopen(generate_request) as response:
             response_bytes = response.read() # <- raw bytes
@@ -108,10 +79,10 @@ def lambda_handler(event, context):
         assistant_response = response_json["generated_text"]
         
         # アシスタントの応答を会話履歴に追加
-        # messages.append({
-        #     "role": "assistant",
-        #     "content": assistant_response
-        # })
+        messages.append({
+            "role": "assistant",
+            "content": assistant_response
+        })
         
         # 成功レスポンスの返却
         return {
@@ -125,7 +96,7 @@ def lambda_handler(event, context):
             "body": json.dumps({
                 "success": True,
                 "response": assistant_response,
-                # "conversationHistory": messages
+                "conversationHistory": messages
             })
         }
         
